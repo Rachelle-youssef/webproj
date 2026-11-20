@@ -1,0 +1,195 @@
+.medicine-scanner .scan-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.medicine-scanner .scan-card,
+.medicine-scanner .scan-result {
+  min-width: 0;
+  padding: 28px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+.medicine-scanner .scan-card h2,
+.medicine-scanner .scan-result h2 {
+  margin: 8px 0 20px;
+  font-family: Georgia, serif;
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  font-weight: 400;
+  line-height: 1.2;
+}
+.medicine-scanner .scan-step {
+  color: var(--med);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+.medicine-scanner .scan-viewfinder {
+  position: relative;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+.medicine-scanner .scan-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  color: var(--med);
+}
+.medicine-scanner .scan-placeholder svg {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 12px;
+}
+.medicine-scanner .scan-placeholder p {
+  margin: 8px 0;
+}
+.medicine-scanner .scan-placeholder small {
+  color: var(--mute);
+}
+.medicine-scanner video:not([hidden]) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #131c17;
+}
+.medicine-scanner .scan-live {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  border-radius: 20px;
+  background: #173d2c;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+.medicine-scanner .scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+.medicine-scanner .scan-camera-note {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin: 16px 0 24px;
+}
+.medicine-scanner .scan-upload {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.medicine-scanner input[type='file'] {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  font-size: 0.8rem;
+}
+.medicine-scanner input::file-selector-button {
+  background: var(--surface-muted);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  margin-right: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.medicine-scanner .scan-side {
+  display: grid;
+  gap: 24px;
+}
+.medicine-scanner .scan-guidance {
+  background: var(--medicine-soft);
+}
+.medicine-scanner .scan-guidance p {
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+.medicine-scanner .scan-guidance a {
+  color: var(--med);
+  font-weight: 600;
+}
+.medicine-scanner .scan-message {
+  margin: 24px 0 12px;
+}
+.medicine-scanner .scan-result {
+  margin-top: 20px;
+  overflow-wrap: anywhere;
+  scroll-margin-top: 110px;
+}
+.medicine-scanner .scan-result-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+}
+.medicine-scanner .scan-result-heading h2 {
+  margin-bottom: 8px;
+}
+.medicine-scanner .scan-outcome {
+  border-left: 3px solid var(--blood);
+  padding: 14px 18px;
+  background: var(--blood-soft);
+  line-height: 1.6;
+}
+.medicine-scanner .scan-available {
+  border-color: var(--med);
+  background: var(--medicine-soft);
+}
+.medicine-scanner .scan-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px 0;
+  margin: 0;
+}
+.medicine-scanner .scan-facts dt {
+  color: var(--mute);
+  font-size: 0.75rem;
+  margin-bottom: 8px;
+}
+.medicine-scanner .scan-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+@media (max-width: 1000px) {
+  .medicine-scanner .scan-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .medicine-scanner .scan-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .medicine-scanner .scan-card,
+  .medicine-scanner .scan-result {
+    padding: 20px 16px;
+  }
+  .medicine-scanner .scan-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .medicine-scanner .scan-result-heading {
+    flex-direction: column;
+  }
+  .medicine-scanner .scan-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .medicine-scanner .scan-placeholder svg {
+    width: 52px;
+    height: 52px;
+    margin-bottom: 0;
+  }
+  .medicine-scanner .scan-placeholder {
+    padding: 12px;
+    font-size: 0.85rem;
+  }
+}

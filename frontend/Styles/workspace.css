@@ -1,0 +1,568 @@
+/* Shared workspace navigation and task overview. */
+:root {
+  --workspace-ink: #17363c;
+  --workspace-soft: #edf4f1;
+}
+[hidden] {
+  display: none !important;
+}
+#toast:empty {
+  display: none;
+}
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: -80px;
+  z-index: 100;
+  padding: 12px 18px;
+  background: var(--card);
+  color: var(--ink);
+  border: 2px solid var(--blue);
+  border-radius: 8px;
+}
+.skip-link:focus {
+  top: 12px;
+}
+.top {
+  min-height: 76px;
+  padding: 12px 28px;
+}
+.top > .brand {
+  min-width: 182px;
+}
+#public-nav {
+  justify-content: flex-end;
+}
+.app-shell {
+  max-width: 1480px;
+  margin: 0 auto;
+}
+.workspace-nav {
+  background: var(--workspace-ink);
+  color: #eff6f2;
+  padding: 28px 18px;
+}
+.workspace-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #bed2cb;
+}
+#workspace-role {
+  margin: 5px 0 30px;
+  font-size: 18px;
+  font-weight: 600;
+}
+#nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#nav a {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 12px;
+  border-radius: 10px;
+  color: #d9e8e3;
+  font-size: 14px;
+  text-decoration: none;
+}
+#nav a:hover {
+  background: #23474e;
+  color: #fff;
+}
+#nav a.on {
+  background: #eff6f2;
+  color: #17363c;
+}
+#nav a:focus-visible {
+  outline: 2px solid #b4d6c8;
+  outline-offset: 2px;
+}
+.nav-mark {
+  width: 22px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+.workspace-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 44px;
+  padding: 18px 10px;
+  border-top: 1px solid #406067;
+  color: #bfd2cc;
+  font-size: 12px;
+}
+.connection-mark {
+  width: 8px;
+  height: 8px;
+  border: 2px solid #b3d7c7;
+  border-radius: 50%;
+  flex: none;
+}
+body[data-workspace='signed-in'] .app-shell {
+  display: grid;
+  grid-template-columns: 242px minmax(0, 1fr);
+  min-height: calc(100vh - 76px);
+}
+body[data-workspace='signed-in'] main {
+  width: 100%;
+  min-width: 0;
+  padding: 38px 40px 70px;
+}
+body[data-workspace='signed-in'] .workspace-nav {
+  position: sticky;
+  top: 76px;
+  align-self: start;
+  min-height: calc(100vh - 76px);
+}
+body[data-workspace='signed-in'] .card:hover,
+body[data-workspace='signed-in'] .stat:hover {
+  transform: none;
+}
+body[data-workspace='signed-in'] .donor-heading {
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+body[data-workspace='signed-in'] .donor-heading h1 {
+  font-size: clamp(28px, 3vw, 38px);
+  letter-spacing: -0.045em;
+  line-height: 1.2;
+}
+body[data-workspace='signed-in'] .donor-heading p {
+  margin: 10px 0 0;
+  max-width: 650px;
+}
+body[data-workspace='signed-in'] .donor-dashboard > section {
+  margin-top: 30px;
+}
+body[data-workspace='signed-in'] h2 {
+  font-size: 23px;
+  margin-bottom: 14px;
+}
+body[data-workspace='signed-in'] .card {
+  box-shadow: 0 2px 6px rgba(20, 33, 46, 0.025);
+}
+body[data-workspace='signed-in'] form.card {
+  max-width: 680px;
+}
+body[data-workspace='signed-in'] .auth {
+  margin-top: 0;
+  max-width: 680px;
+}
+body[data-workspace='signed-in'] .auth h2 {
+  font-size: 30px;
+  margin-bottom: 24px;
+}
+body[data-workspace='signed-in'] .grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+}
+body[data-workspace='signed-in'] .card > form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+body[data-workspace='signed-in'] .card h3 {
+  margin: 0 0 12px;
+}
+body[data-workspace='signed-in'] .stat b {
+  font-size: 30px;
+}
+body[data-workspace='signed-in'] [data-summary] {
+  margin-top: 26px;
+}
+.overview-heading {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--workspace-soft);
+  overflow: hidden;
+}
+.overview-heading .eyebrow {
+  margin: 0 0 16px;
+  color: #40655a;
+}
+.overview-heading h1 {
+  margin: 0;
+  font-size: clamp(32px, 4.5vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+  color: var(--workspace-ink);
+}
+.overview-heading p {
+  margin: 16px 0 0;
+  max-width: 490px;
+  color: #41605c;
+  line-height: 1.65;
+}
+.blood-pass {
+  flex: none;
+  width: 130px;
+  padding: 24px 16px;
+  border-left: 1px solid #c5d8d0;
+  text-align: center;
+}
+.blood-pass span {
+  display: block;
+  font-size: 12px;
+  color: #41605c;
+}
+.blood-pass strong {
+  display: block;
+  color: var(--blood);
+  font-size: 46px;
+  letter-spacing: -0.05em;
+  line-height: 1.2;
+  margin-top: 6px;
+}
+.section-heading {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.section-heading > span {
+  font-size: 12px;
+}
+.overview-tasks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+.task-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  text-decoration: none;
+}
+.task-card > span:first-child {
+  font-size: 12px;
+  color: var(--mute);
+  padding-right: 16px;
+}
+.task-card strong {
+  font-size: 27px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.task-card small {
+  color: var(--mute);
+  font-size: 12px;
+  margin-top: auto;
+}
+.task-arrow {
+  position: absolute;
+  top: 17px;
+  right: 14px;
+  color: var(--med);
+}
+.task-card:hover {
+  border-color: var(--med);
+}
+.task-card:focus-visible,
+.path-link:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+}
+.path-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.path-card {
+  position: relative;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  overflow: hidden;
+}
+.path-symbol {
+  display: block;
+  margin-bottom: 25px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--blood);
+}
+.path-card::after {
+  content: '';
+  position: absolute;
+  width: 110px;
+  height: 110px;
+  top: -55px;
+  right: -35px;
+  border: 20px solid color-mix(in srgb, var(--blood) 9%, transparent);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.path-card.medicine::after {
+  border-color: color-mix(in srgb, var(--med) 12%, transparent);
+}
+.path-card.medicine .path-symbol {
+  color: var(--med);
+}
+.path-card h3 {
+  font-size: 27px;
+  letter-spacing: -0.04em;
+  margin: 0 0 10px;
+}
+.path-card p {
+  color: var(--mute);
+  font-size: 14px;
+  min-height: 48px;
+  margin: 0 0 25px;
+}
+.path-link {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--blood);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+}
+.medicine .path-link {
+  color: var(--med);
+}
+.journey-note {
+  padding: 26px 0 0;
+  border-top: 1px solid var(--line);
+}
+.journey-note .eyebrow {
+  margin: 0 0 10px;
+}
+.journey-note p {
+  font-size: 14px;
+  color: var(--mute);
+  max-width: 700px;
+}
+.journey-line {
+  display: flex;
+  gap: 12px 30px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--mute);
+}
+.journey-line span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.journey-line span::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--med);
+  border-radius: 50%;
+}
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.admin-filters label {
+  flex: 1 1 165px;
+  min-width: 0;
+}
+.admin-filters button {
+  min-height: 42px;
+}
+.admin-create form.card {
+  margin-top: 20px;
+  box-shadow: none;
+}
+.admin-create p {
+  max-width: 680px;
+}
+.admin-record {
+  align-items: flex-start;
+}
+.admin-record > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.admin-record h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.admin-record small {
+  display: block;
+  margin-right: 12px;
+}
+.admin-confirm {
+  padding: 8px 12px;
+  margin: 0;
+  max-width: 280px;
+}
+.admin-confirm summary {
+  font-size: 13px;
+}
+.admin-confirm p {
+  font-size: 13px;
+}
+.appeal-selection {
+  padding: 12px;
+  border-left: 3px solid var(--med);
+  background: var(--bg);
+  font-size: 14px;
+}
+:root[data-theme='dark'] {
+  --workspace-soft: #193238;
+  --workspace-ink: #c9e2d8;
+  --blood: #ff8fa5;
+  --med: #7fdcc8;
+}
+:root[data-theme='dark'] .workspace-nav {
+  background: #11282e;
+}
+:root[data-theme='dark'] .overview-heading p,
+:root[data-theme='dark'] .overview-heading .eyebrow,
+:root[data-theme='dark'] .blood-pass span {
+  color: #a7c6bc;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --workspace-soft: #193238;
+    --workspace-ink: #c9e2d8;
+    --blood: #ff8fa5;
+    --med: #7fdcc8;
+  }
+  :root:not([data-theme='light']) .workspace-nav {
+    background: #11282e;
+  }
+  :root:not([data-theme='light']) .overview-heading p,
+  :root:not([data-theme='light']) .overview-heading .eyebrow,
+  :root:not([data-theme='light']) .blood-pass span {
+    color: #a7c6bc;
+  }
+}
+@media (max-width: 1000px) {
+  .top {
+    padding: 10px 18px;
+  }
+  .top > .brand {
+    min-width: auto;
+  }
+  body[data-workspace='signed-in'] .app-shell {
+    grid-template-columns: 205px minmax(0, 1fr);
+  }
+  body[data-workspace='signed-in'] main {
+    padding: 28px 24px 60px;
+  }
+  .overview-heading {
+    padding: 26px;
+  }
+  .blood-pass {
+    width: 100px;
+  }
+}
+@media (max-width: 760px) {
+  .top {
+    position: relative;
+    gap: 8px 12px;
+  }
+  #public-nav {
+    justify-content: flex-start;
+    order: 3;
+    width: 100%;
+  }
+  .tools {
+    margin-left: auto;
+  }
+  #who {
+    gap: 5px;
+  }
+  body[data-workspace='signed-in'] .app-shell {
+    display: block;
+  }
+  body[data-workspace='signed-in'] .workspace-nav {
+    position: static;
+    min-height: 0;
+    padding: 14px 18px;
+  }
+  .workspace-label,
+  #workspace-role,
+  .workspace-note {
+    display: none;
+  }
+  #nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  #nav a {
+    padding: 10px 12px;
+    font-size: 13px;
+    gap: 8px;
+  }
+  .nav-mark {
+    width: auto;
+    font-size: 10px;
+  }
+  body[data-workspace='signed-in'] main {
+    padding: 24px 18px 50px;
+  }
+  .overview-heading {
+    align-items: flex-start;
+    padding: 24px;
+    gap: 12px;
+  }
+  .blood-pass {
+    width: 76px;
+    padding: 12px 0 12px 12px;
+  }
+  .blood-pass strong {
+    font-size: 34px;
+  }
+  .path-card {
+    padding: 24px;
+  }
+}
+@media (max-width: 480px) {
+  .path-grid {
+    grid-template-columns: 1fr;
+  }
+  .overview-tasks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .task-card {
+    padding: 18px 14px;
+  }
+  .task-card strong {
+    font-size: 23px;
+    overflow-wrap: anywhere;
+  }
+  .path-card p {
+    min-height: 0;
+  }
+  .blood-pass {
+    width: 68px;
+  }
+  .overview-heading h1 {
+    font-size: 32px;
+  }
+}

@@ -1,0 +1,818 @@
+/* Shared LifeLink design. These tokens control every screen. */
+:root {
+  color-scheme: light;
+  --bg: #f8f6f0;
+  --card: #fffdf8;
+  --ink: #252c28;
+  --mute: #636b62;
+  --line: #dedfd5;
+  --blood: #8b1019;
+  --blood2: #a9232b;
+  --action-bg: #8b1019;
+  --action-hover: #6d0c13;
+  --blood-deep: #6e0c15;
+  --med: #365b49;
+  --medicine-action: #365b49;
+  --surface-muted: #eee9df;
+  --blood-soft: #f1e2dc;
+  --medicine-soft: #e4ebe1;
+  --pending-soft: #f3ead7;
+  --pending-ink: #785716;
+  --sidebar-bg: #263f35;
+  --sidebar-hover: #354f43;
+  --sidebar-text: #e9eee4;
+  --sidebar-muted: #bdcdbd;
+  --sidebar-active-bg: #f8f6f0;
+  --sidebar-active-ink: #8b1019;
+  --workspace-soft: var(--surface-muted);
+  --workspace-ink: var(--ink);
+  --grad: var(--action-bg);
+  --shadow: none;
+  --r: 8px;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #151d1b;
+  --card: #1c2722;
+  --ink: #f2eee4;
+  --mute: #b4bdb4;
+  --line: #39453e;
+  --blood: #f0a097;
+  --blood2: #e2877e;
+  --med: #a3c9b1;
+  --surface-muted: #243029;
+  --blood-soft: #392326;
+  --medicine-soft: #26392e;
+  --pending-soft: #3c321e;
+  --pending-ink: #e4c68d;
+  --sidebar-bg: #1d3028;
+  --sidebar-hover: #2c4437;
+  --sidebar-active-bg: #e8eadd;
+  --sidebar-active-ink: #6e0c15;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #151d1b;
+    --card: #1c2722;
+    --ink: #f2eee4;
+    --mute: #b4bdb4;
+    --line: #39453e;
+    --blood: #f0a097;
+    --blood2: #e2877e;
+    --med: #a3c9b1;
+    --surface-muted: #243029;
+    --blood-soft: #392326;
+    --medicine-soft: #26392e;
+    --pending-soft: #3c321e;
+    --pending-ink: #e4c68d;
+    --sidebar-bg: #1d3028;
+    --sidebar-hover: #2c4437;
+    --sidebar-active-bg: #e8eadd;
+    --sidebar-active-ink: #6e0c15;
+  }
+}
+
+/* Header, typography, controls and status colors. */
+body {
+  background: var(--bg);
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+.top {
+  min-height: 88px;
+  background: var(--bg);
+  box-shadow: none;
+  padding: 16px 28px;
+}
+.brand {
+  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: -0.7px;
+}
+.brand .drop {
+  background: var(--action-bg);
+  box-shadow: none;
+  width: 17px;
+  height: 21px;
+}
+nav a.on {
+  background: var(--blood-soft);
+  color: var(--blood);
+}
+.top .icon {
+  background: var(--card);
+  border-color: var(--line);
+}
+.avatar {
+  background: var(--action-bg);
+  box-shadow: none;
+}
+footer {
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--mute);
+}
+.eyebrow {
+  color: var(--blood);
+  font-size: 10px;
+  letter-spacing: 1.7px;
+  font-weight: 650;
+}
+h1,
+h2 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+}
+.btn,
+.btn.med {
+  border-radius: 6px;
+  background: var(--action-bg);
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 17px;
+}
+.btn.med {
+  background: var(--medicine-action);
+}
+.btn:hover,
+.btn.med:hover {
+  background: var(--action-hover);
+  box-shadow: none;
+  transform: none;
+}
+.btn.med:hover {
+  background: #294637;
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: none;
+}
+.btn.ghost:hover {
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+.btn.sm {
+  padding: 7px 12px;
+  font-size: 12px;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+input,
+select,
+textarea {
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 14px;
+  padding: 11px 12px;
+}
+label {
+  font-size: 12px;
+  font-weight: 550;
+  gap: 7px;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--blood);
+  outline-offset: 4px;
+}
+.card,
+.item,
+.stat,
+.bt,
+.note {
+  box-shadow: none;
+  border-radius: 8px;
+}
+.card:hover,
+.stat:hover,
+.bt:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--line);
+}
+.item {
+  border-left-width: 3px;
+  padding: 20px;
+  gap: 16px;
+}
+.item.med {
+  border-left-color: var(--med);
+}
+.tag {
+  background: var(--action-bg);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.stat b {
+  background: none;
+  color: var(--ink);
+  -webkit-text-fill-color: currentColor;
+  font-family: Georgia, serif;
+  font-weight: 400;
+}
+.stat::after {
+  height: 2px;
+  background: var(--action-bg);
+}
+.stat.alert {
+  background: var(--blood-soft);
+}
+.stat.alert b {
+  color: var(--blood);
+}
+.pill {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  padding: 4px 10px;
+}
+.pill.pending,
+.pill.invited,
+.pill.urgent {
+  color: var(--pending-ink);
+  background: var(--pending-soft);
+}
+.pill.approved,
+.pill.completed,
+.pill.fulfilled,
+.pill.dispensed,
+.pill.accepted,
+.pill.open {
+  color: var(--med);
+  background: var(--medicine-soft);
+}
+.pill.rejected,
+.pill.declined,
+.pill.cancelled,
+.pill.expired,
+.pill.sos {
+  color: var(--blood);
+  background: var(--blood-soft);
+}
+/* Match the specificity of the legacy dark-mode badge rules. */
+:root[data-theme='dark'] .pill.pending,
+:root[data-theme='dark'] .pill.invited {
+  color: var(--pending-ink);
+  background: var(--pending-soft);
+}
+:root[data-theme='dark'] .pill.approved,
+:root[data-theme='dark'] .pill.completed,
+:root[data-theme='dark'] .pill.fulfilled,
+:root[data-theme='dark'] .pill.dispensed {
+  color: var(--med);
+  background: var(--medicine-soft);
+}
+:root[data-theme='dark'] .pill.rejected,
+:root[data-theme='dark'] .pill.declined,
+:root[data-theme='dark'] .pill.cancelled,
+:root[data-theme='dark'] .pill.expired,
+:root[data-theme='dark'] .pill.sos {
+  color: var(--blood);
+  background: var(--blood-soft);
+}
+
+/* Shared workspace navigation and page layout for all four roles. */
+body[data-workspace='signed-in'] .app-shell {
+  grid-template-columns: 230px minmax(0, 1fr);
+  min-height: calc(100vh - 88px);
+}
+body[data-workspace='signed-in'] main {
+  max-width: 1160px;
+  padding: 42px 44px 72px;
+}
+body[data-workspace='signed-in'] .workspace-nav {
+  top: 88px;
+  min-height: calc(100vh - 88px);
+  background: var(--sidebar-bg);
+  padding: 32px 17px;
+}
+:root[data-theme='dark'] .workspace-nav {
+  background: var(--sidebar-bg);
+}
+.workspace-label {
+  color: var(--sidebar-muted);
+  font-size: 9px;
+  letter-spacing: 1.8px;
+  padding-inline: 10px;
+}
+#workspace-role {
+  font-family: Georgia, serif;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--sidebar-text);
+  padding-inline: 10px;
+  margin: 12px 0 34px;
+}
+#nav {
+  gap: 6px;
+}
+#nav a {
+  color: var(--sidebar-text);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 13px 11px;
+  gap: 10px;
+}
+#nav a:hover {
+  background: var(--sidebar-hover);
+  color: #fff;
+}
+#nav a.on {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-ink);
+}
+#nav a.on::after {
+  content: '';
+  margin-left: auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.nav-mark {
+  width: 20px;
+  font-size: 10px;
+  font-weight: 400;
+}
+.workspace-note {
+  border-color: #ffffff26;
+  color: var(--sidebar-muted);
+  font-size: 10px;
+  padding: 20px 10px;
+  margin-top: 36px;
+}
+.connection-mark {
+  border-color: #c0cfba;
+  width: 6px;
+  height: 6px;
+}
+body[data-workspace='signed-in'] .donor-heading {
+  padding-bottom: 28px;
+}
+body[data-workspace='signed-in'] .donor-heading h1 {
+  font-family: Georgia, serif;
+  font-size: clamp(35px, 4vw, 49px);
+  font-weight: 400;
+  letter-spacing: -1.7px;
+  line-height: 1.12;
+}
+body[data-workspace='signed-in'] .donor-heading p {
+  font-size: 14px;
+  line-height: 1.8;
+  max-width: 680px;
+}
+body[data-workspace='signed-in'] .donor-heading .eyebrow {
+  margin-bottom: 16px;
+}
+body[data-workspace='signed-in'] h2 {
+  font-size: 27px;
+  letter-spacing: -0.7px;
+  font-weight: 400;
+  margin-bottom: 18px;
+}
+body[data-workspace='signed-in'] .card {
+  padding: 24px;
+  box-shadow: none;
+}
+body[data-workspace='signed-in'] .card h3 {
+  font-size: 17px;
+  letter-spacing: -0.3px;
+  font-weight: 600;
+}
+body[data-workspace='signed-in'] form.card {
+  gap: 17px;
+  max-width: 700px;
+}
+body[data-workspace='signed-in'] .donor-dashboard > section {
+  margin-top: 34px;
+}
+body[data-workspace='signed-in'] .donor-dashboard > section[data-panel] {
+  background: var(--blood-soft);
+  padding: 28px;
+}
+body[data-workspace='signed-in'] .donor-dashboard > section[data-panel] h2 {
+  font-size: 31px;
+  margin-bottom: 10px;
+}
+body[data-workspace='signed-in'] .donor-dashboard > section[data-panel] .btn {
+  margin-top: 10px;
+}
+body[data-workspace='signed-in'] .empty {
+  background: var(--card);
+  border-style: solid;
+  text-align: left;
+  font-size: 13px;
+}
+body[data-workspace='signed-in'] .note {
+  border-left-width: 3px;
+  font-size: 13px;
+}
+body[data-workspace='signed-in'] .toolbar {
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  border-radius: 8px;
+  gap: 14px;
+}
+.admin-filters {
+  gap: 16px;
+}
+.admin-record small {
+  font-size: 12px;
+  line-height: 1.75;
+}
+.admin-confirm {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.admin-create {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.admin-create summary {
+  font-size: 14px;
+  font-weight: 550;
+}
+.progress i,
+.meter.low i {
+  background: var(--action-bg);
+}
+
+/* Overview panels repeat the home page's blood and medicine colors. */
+.overview-heading {
+  background: var(--surface-muted);
+  border-radius: 8px;
+  padding: 34px;
+}
+.overview-heading h1 {
+  color: var(--ink);
+  font-family: Georgia, serif;
+  font-size: clamp(37px, 4.5vw, 55px);
+  font-weight: 400;
+  letter-spacing: -1.8px;
+}
+.overview-heading .eyebrow,
+.overview-heading p,
+.blood-pass span,
+:root[data-theme='dark'] .overview-heading .eyebrow,
+:root[data-theme='dark'] .overview-heading p,
+:root[data-theme='dark'] .blood-pass span {
+  color: var(--mute);
+}
+.overview-heading .eyebrow {
+  font-size: 9px;
+}
+.overview-heading p {
+  font-size: 14px;
+  max-width: 450px;
+}
+.blood-pass {
+  border-left-color: var(--line);
+  padding: 18px 12px;
+}
+.blood-pass strong {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 48px;
+  color: var(--blood);
+}
+.blood-pass span {
+  font-size: 10px;
+}
+.task-card {
+  border-radius: 8px;
+  padding: 23px 20px;
+  gap: 16px;
+  background: var(--card);
+}
+.task-card strong {
+  font-family: Georgia, serif;
+  font-size: 27px;
+  font-weight: 400;
+  letter-spacing: -0.8px;
+  overflow-wrap: anywhere;
+}
+.task-card > span:first-child,
+.task-card small {
+  font-size: 11px;
+}
+.task-arrow {
+  color: var(--blood);
+}
+.task-card:hover {
+  border-color: var(--blood);
+}
+.path-card {
+  background: var(--blood-soft);
+  border-color: transparent;
+  border-radius: 8px;
+  padding: 30px;
+}
+.path-card.medicine {
+  background: var(--medicine-soft);
+}
+.path-card::after {
+  content: '+';
+  font-family: Georgia, serif;
+  font-size: 150px;
+  font-weight: 400;
+  color: var(--blood);
+  opacity: 0.05;
+  width: auto;
+  height: auto;
+  border: 0;
+  top: 10px;
+  right: 20px;
+}
+.path-card.medicine::after {
+  color: var(--med);
+}
+.path-symbol {
+  margin-bottom: 30px;
+  font-size: 10px;
+  letter-spacing: 1.7px;
+}
+body[data-workspace='signed-in'] .path-card h3 {
+  font-family: Georgia, serif;
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: -0.8px;
+  margin-bottom: 15px;
+}
+.path-card p {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.path-link,
+.medicine .path-link {
+  color: var(--ink);
+  font-size: 12px;
+  padding-top: 20px;
+  border-color: color-mix(in srgb, var(--ink) 15%, transparent);
+}
+.journey-note {
+  margin-top: 40px;
+  padding-top: 26px;
+}
+.journey-note p {
+  line-height: 1.8;
+  font-size: 13px;
+}
+.journey-line {
+  gap: 14px 24px;
+  font-size: 11px;
+}
+.journey-line span::before {
+  border-color: var(--blood);
+  width: 6px;
+  height: 6px;
+}
+
+/* Login, registration and account pages. */
+body:not([data-screen='home']) .auth {
+  max-width: 580px;
+  margin: 50px auto 30px;
+}
+body:not([data-screen='home']) .auth h2,
+body[data-workspace='signed-in'] .auth h2 {
+  font-family: Georgia, serif;
+  font-size: 42px;
+  font-weight: 400;
+  letter-spacing: -1.5px;
+  margin-bottom: 20px;
+}
+.auth .auth-kicker {
+  margin: 0 0 15px;
+}
+.auth-intro {
+  color: var(--mute);
+  font-size: 14px;
+  line-height: 1.7;
+  margin: -7px 0 26px;
+}
+.auth form.card {
+  padding: 30px;
+  gap: 18px;
+  border-radius: 8px;
+}
+.auth .btn {
+  min-height: 44px;
+}
+.auth .btn.ghost {
+  text-align: center;
+}
+
+/* Map surfaces and pins share the same palette. */
+.request-map-pin.sos,
+.map-legend .sos {
+  background: var(--action-bg);
+}
+.request-map-pin.normal,
+.map-legend .normal {
+  background: var(--medicine-action);
+}
+.request-map-canvas,
+.location-picker-map,
+.map-request-card,
+.location-dialog {
+  border-radius: 8px;
+}
+.map-request-card {
+  background: var(--card);
+}
+.request-map-popup a {
+  color: var(--blood);
+}
+.location-dialog::backdrop {
+  background: #15231ccb;
+}
+.request-map-panel {
+  top: 108px;
+}
+.leaflet-popup-content-wrapper {
+  background: var(--card);
+  color: var(--ink);
+}
+.leaflet-popup-tip {
+  background: var(--card);
+}
+.leaflet-container a.leaflet-popup-close-button {
+  color: var(--mute);
+}
+
+@media (max-width: 1000px) {
+  body[data-workspace='signed-in'] .app-shell {
+    grid-template-columns: 205px minmax(0, 1fr);
+  }
+  body[data-workspace='signed-in'] main {
+    padding: 32px 26px 60px;
+  }
+  .path-card {
+    padding: 24px;
+  }
+  body[data-workspace='signed-in'] .path-card h3 {
+    font-size: 29px;
+  }
+}
+@media (max-width: 760px) {
+  .top {
+    position: relative;
+    min-height: 76px;
+    padding: 12px 20px;
+  }
+  body[data-workspace='signed-in'] .app-shell {
+    display: block;
+  }
+  body[data-workspace='signed-in'] .workspace-nav {
+    position: static;
+    min-height: 0;
+    padding: 13px 18px;
+  }
+  #nav {
+    gap: 6px;
+  }
+  #nav a {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+  #nav a.on::after {
+    display: none;
+  }
+  body[data-workspace='signed-in'] main {
+    padding: 28px 22px 50px;
+  }
+  .overview-heading {
+    padding: 26px;
+    gap: 16px;
+  }
+  .overview-heading h1 {
+    font-size: 39px;
+  }
+  .blood-pass {
+    width: 100px;
+    padding: 12px;
+  }
+  .blood-pass strong {
+    font-size: 38px;
+  }
+  .overview-heading p {
+    font-size: 13px;
+  }
+  body[data-workspace='signed-in'] .donor-heading h1 {
+    font-size: 38px;
+    letter-spacing: -1.3px;
+  }
+  body[data-workspace='signed-in'] .donor-heading p {
+    font-size: 13px;
+  }
+  .request-map-panel {
+    top: 0;
+  }
+}
+@media (max-width: 480px) {
+  .top {
+    padding: 12px 18px;
+  }
+  .top > .brand {
+    min-width: auto;
+    font-size: 22px;
+  }
+  #who .nm {
+    display: none;
+  }
+  #who {
+    gap: 7px;
+  }
+  #who .avatar {
+    width: 29px;
+    height: 29px;
+  }
+  #who .btn.sm {
+    font-size: 11px;
+    padding: 6px 9px;
+  }
+  body[data-workspace='signed-in'] main {
+    padding: 25px 18px 45px;
+  }
+  .overview-heading {
+    flex-wrap: wrap;
+    padding: 24px;
+  }
+  .overview-heading h1 {
+    font-size: 38px;
+  }
+  .blood-pass {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 15px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    text-align: left;
+    padding: 16px 0 0;
+  }
+  .blood-pass strong {
+    margin: 0;
+    font-size: 30px;
+  }
+  .overview-tasks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .task-card {
+    padding: 18px 14px;
+  }
+  .task-card strong {
+    font-size: 24px;
+  }
+  .path-grid {
+    grid-template-columns: 1fr;
+  }
+  body[data-workspace='signed-in'] .card {
+    padding: 20px;
+  }
+  body[data-workspace='signed-in'] .donor-dashboard > section[data-panel] {
+    padding: 23px;
+  }
+  body[data-workspace='signed-in'] h2 {
+    font-size: 26px;
+  }
+  .item {
+    padding: 17px;
+  }
+  .auth form.card {
+    padding: 23px;
+  }
+  body:not([data-screen='home']) .auth {
+    margin-top: 22px;
+  }
+  body:not([data-screen='home']) .auth h2,
+  body[data-workspace='signed-in'] .auth h2 {
+    font-size: 36px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .card,
+  .stat,
+  .item,
+  .bt {
+    transition: none;
+  }
+  .tag.sos {
+    animation: none;
+  }
+}

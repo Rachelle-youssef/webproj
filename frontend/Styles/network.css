@@ -1,0 +1,150 @@
+/* Home hero: the blood network (see Scripts/heroScene.js). Loaded after home.css. */
+body .home-hero h1 {
+  font-size: clamp(34px, 3.7vw, 53px);
+  letter-spacing: -2px;
+  line-height: 1.04;
+}
+body .home-hero h1 em {
+  display: inline-block;
+}
+.home-art.home-network {
+  background: radial-gradient(circle at 50% 46%, #5d0b16 0%, #2b060b 58%, #14070a 100%);
+}
+.home-network .home-art-grid {
+  opacity: 0.12;
+}
+.home-art.home-network::after {
+  display: none;
+}
+.network-fallback {
+  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.home-network.is-static .network-fallback {
+  display: block;
+}
+.home-network.is-static [data-node='donors'] {
+  left: 22%;
+  top: 62%;
+}
+.home-network.is-static [data-node='patients'] {
+  left: 78%;
+  top: 62%;
+}
+.home-network.is-static [data-node='medical'] {
+  left: 50%;
+  top: 18%;
+}
+.net-node {
+  position: absolute;
+  z-index: 2;
+  left: var(--x, 50%);
+  top: var(--y, 50%);
+  width: max-content;
+  max-width: min(170px, 28%);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+  color: #fff4e8;
+  transform: translate(-50%, -26px); /* the badge's centre sits on its 3D point */
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+.net-node.is-on {
+  opacity: 1;
+}
+.net-node-top {
+  transform: translate(-50%, calc(-100% + 26px)); /* the text sits above the badge, away from the line */
+}
+.net-node-top .net-badge {
+  order: 2;
+}
+.net-badge {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #2b060b;
+  border: 1px solid rgba(255, 160, 150, 0.55);
+  box-shadow:
+    0 0 22px rgba(255, 60, 70, 0.55),
+    inset 0 0 12px rgba(255, 60, 70, 0.25);
+  transform: scale(0.4);
+  transition: transform 0.7s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.net-node.is-on .net-badge {
+  transform: scale(1);
+}
+.net-badge svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: #ffd9cf;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.net-node b {
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+.net-node small {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #f3cfc4;
+  opacity: 0.85;
+}
+.net-logo {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 77%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: #fff4e8;
+  transform: translate(-50%, 10px);
+  opacity: 0;
+  transition:
+    opacity 0.9s ease,
+    transform 0.9s ease;
+  pointer-events: none;
+}
+.net-logo.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.net-logo svg {
+  width: 22px;
+  height: 22px;
+  fill: #ff4a56;
+  stroke: none;
+}
+@media (max-width: 520px) {
+  .net-node {
+    max-width: 112px;
+  }
+  .net-node small {
+    display: none;
+  }
+  .net-logo {
+    font-size: 19px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .net-node,
+  .net-badge,
+  .net-logo {
+    transition: none;
+  }
+}

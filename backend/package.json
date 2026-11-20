@@ -1,0 +1,54 @@
+{
+  "name": "lifelink-api",
+  "version": "3.0.0",
+  "private": true,
+  "description": "LifeLink API: blood and medicine donation platform (Web Programming I)",
+  "license": "UNLICENSED",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=24.7.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "jest --runInBand",
+    "db:setup": "node scripts/setup-db.js",
+    "db:reset": "node scripts/setup-db.js --reset",
+    "db:setup:test": "node scripts/setup-db.js --test",
+    "db:reset:test": "node scripts/setup-db.js --test --reset",
+    "admin:create": "node scripts/create-admin.js",
+    "db:seed": "node scripts/seed-demo.js",
+    "db:migrate:acceptance": "node scripts/migrate-acceptance.js",
+    "db:migrate:acceptance:test": "node scripts/migrate-acceptance.js --test",
+    "db:migrate:sessions": "node scripts/migrate-sessions.js",
+    "db:migrate:sessions:test": "node scripts/migrate-sessions.js --test",
+    "db:migrate:hospital-pins": "node scripts/migrate-hospital-pins.js",
+    "db:migrate:hospital-pins:test": "node scripts/migrate-hospital-pins.js --test"
+  },
+  "dependencies": {
+    "cors": "2.8.6",
+    "dotenv": "18.0.6",
+    "express": "5.2.1",
+    "express-rate-limit": "8.7.1",
+    "express-validator": "7.3.2",
+    "helmet": "8.3.0",
+    "mysql2": "3.24.5",
+    "qrcode": "1.5.4",
+    "swagger-ui-express": "5.0.1",
+    "yaml": "2.9.1",
+    "express-session": "1.19.0"
+  },
+  "devDependencies": {
+    "jest": "30.5.2",
+    "supertest": "7.3.1"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/setup-env.js"
+    ],
+    "testMatch": [
+      "**/*.test.js"
+    ]
+  }
+}

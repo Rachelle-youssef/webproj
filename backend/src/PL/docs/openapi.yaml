@@ -1,0 +1,2486 @@
+openapi: 3.1.0
+info:
+  title: LifeLink API
+  version: 3.0.0
+  description: |
+    REST API of LifeLink, a blood and medicine donation platform for Lebanon.
+
+    **Conventions used by every endpoint**
+    - Successful replies: `{ "data": ... }`; lists add `"meta": { "page", "limit", "total", "pages" }`.
+    - Errors: `{ "error": { "code", "message", "details"? } }` with the HTTP status codes listed under each endpoint.
+    - Lists accept `page` (from 1), `limit` (1 to 100, default 20) and `sort` (a field name, `-` in front for descending).
+    - Requests that change data (POST, PATCH, DELETE) must send the header `X-Requested-With: LifeLink`.
+    - Signed-in requests carry the `ll_session` cookie, set by `POST /auth/login`.
+    - Authentication uses express-session with a MySQL store. The cookie contains only a signed random session ID, not a JWT or user details.
+    - Login regenerates the ID; logout deletes its server record. Password changes revoke other sessions and issue a new ID for the current browser.
+    - Dates are ISO 8601: `2027-06-01` for dates, `2026-10-21T09:30:00.000Z` (UTC) for moments.
+servers:
+  - url: /api/v1
+tags:
+  - name: health
+    description: Is the API up and can it reach the database?
+  - name: auth
+    description: Sign up, sign in, sign out, and who is signed in.
+  - name: users
+    description: Your own profile and password; account management for admins.
+  - name: reference
+    description: Fixed lists the forms need (no sign-in).
+  - name: blood-requests
+    description: Requests for blood, their review, donor matching, invitations and units from the blood bank.
+  - name: blood-donations
+    description: Offers, invitations, answers, admin acceptance and physical donation completion. A donor may give blood once every 8 weeks (56 days).
+  - name: blood-stock
+    description: The blood bank's units per blood type and the history of every change.
+
+  - name: calls
+  - name: notifications
+  - name: feed
+  - name: admin
+  - name: Medicines
+    description: Medicine donations, review, stock, QR labels, requests and handoffs.
+
+paths:
+  /health:
+    get:
+      tags: [ health ]
+      summary: Check that the API and its database are working
+      operationId: getHealth
+      responses:
+        '200':
+          description: The API and the database are up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Health' }
+              example:
+                data: { status: ok, database: up, version: 3.0.0, uptime_seconds: 42, time: '2026-10-21T09:30:00.000Z' }
+        '503':
+          description: The API is running but cannot reach the database.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Health' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/register:
+    post:
+      tags: [ auth ]
+      summary: Create an account (donor, recipient or hospital) and sign in
+      description: Admin accounts cannot be created here. Hospitals must supply their hospital pin inside Lebanon; donors and recipients need no coordinates. Limited to 10 attempts per 15 minutes per address.
+      operationId: register
+      parameters: [ { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterInput' }
+            example: { full_name: Maya Nasr, email: maya@example.com, password: Password123, role: donor, city: Beirut, phone: '+961 3 123 456', latitude: 33.89, longitude: 35.5, blood_type_id: 8 }
+      responses:
+        '201':
+          description: Account created; the session cookie is set.
+          headers:
+            Set-Cookie: { description: 'll_session=...; Path=/api; HttpOnly; SameSite=Strict', schema: { type: string } }
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/login:
+    post:
+      tags: [ auth ]
+      summary: Sign in
+      description: A wrong password and an unknown email get the same 401 answer. Limited to 10 attempts per 15 minutes per address.
+      operationId: login
+      parameters: [ { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginInput' }
+            example: { email: maya@lifelink.test, password: Demo12345 }
+      responses:
+        '200':
+          description: Signed in; the session cookie is set.
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403':
+          description: Right password, but the account was deactivated (code ACCOUNT_DISABLED).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/logout:
+    post:
+      tags: [ auth ]
+      summary: Sign out (clears the session cookie)
+      operationId: logout
+      parameters: [ { $ref: '#/components/parameters/csrfHeader' } ]
+      responses:
+        '204': { description: Signed out. }
+
+  /auth/me:
+    get:
+      tags: [ auth ]
+      summary: The signed-in user
+      operationId: me
+      security: [ { sessionCookie: [] } ]
+      responses:
+        '200':
+          description: The signed-in user's profile.
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /users/me:
+    patch:
+      tags: [ users ]
+      summary: Update your own profile
+      description: Only the fields listed are accepted; role, email and status cannot be changed here.
+      operationId: updateMe
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileUpdate' }
+            example: { city: Tripoli, latitude: 34.44, longitude: 35.84, is_available: false }
+      responses:
+        '200':
+          description: The updated profile.
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /users/me/password:
+    patch:
+      tags: [ users ]
+      summary: Change your password
+      description: Every other device is signed out; this one receives a fresh session cookie.
+      operationId: changeMyPassword
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordChange' }
+      responses:
+        '204': { description: Password changed. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /users:
+    get:
+      tags: [ users ]
+      summary: List accounts (admins only)
+      operationId: listUsers
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/limit' }
+        - { name: sort, in: query, schema: { type: string, enum: [ created_at, -created_at, full_name, -full_name, email, -email ], default: -created_at } }
+        - { name: role, in: query, schema: { type: string, enum: [ donor, recipient, hospital, admin ] } }
+        - { name: is_active, in: query, schema: { type: string, enum: [ 'true', 'false' ] } }
+        - { name: q, in: query, description: Searches name and email., schema: { type: string, maxLength: 100 } }
+      responses:
+        '200':
+          description: One page of accounts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/User' } }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /users/{id}:
+    get:
+      tags: [ users ]
+      summary: One account (admins only)
+      operationId: getUser
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } } ]
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/{id}/status:
+    patch:
+      tags: [ users ]
+      summary: Activate or deactivate an account (admins only)
+      description: A deactivated user is signed out at once and cannot sign in. Admins cannot deactivate themselves.
+      operationId: setUserStatus
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { $ref: '#/components/parameters/csrfHeader' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ is_active ], properties: { is_active: { type: boolean } }, additionalProperties: false }
+      responses:
+        '200':
+          description: The account with its new status.
+          content:
+            application/json:
+              schema: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /blood-types:
+    get:
+      tags: [ reference ]
+      summary: The 8 blood types (ids used by every blood form)
+      operationId: listBloodTypes
+      responses:
+        '200':
+          description: All blood types.
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/BloodType' } } } } } }
+
+  /blood-requests:
+    post:
+      tags: [ blood-requests ]
+      summary: Ask for blood (recipients and hospitals)
+      description: The request starts as pending until an admin approves it. Hospital accounts can reuse their saved hospital city and pin. Recipients supply the treating hospital city and pin explicitly; their home coordinates are never copied. At most 5 active requests per requester.
+      operationId: createBloodRequest
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BloodRequestInput' }
+            example: { blood_type_id: 8, units_needed: 2, urgency: sos, hospital_name: AUBMC }
+      responses:
+        '201': { description: Request created (pending)., content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/BloodRequest' } } } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    get:
+      tags: [ blood-requests ]
+      summary: List requests
+      description: Admins see all requests; recipients and hospitals see their own; donors see open requests their blood type can be given to (as OpenBloodRequest, without the requester's identity).
+      operationId: listBloodRequests
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/limit' }
+        - { name: sort, in: query, schema: { type: string, enum: [ urgency, -urgency, created_at, -created_at, units_needed, -units_needed ], default: -urgency } }
+        - { name: status, in: query, schema: { type: string, enum: [ pending, open, fulfilled, cancelled ] } }
+        - { name: urgency, in: query, schema: { type: string, enum: [ normal, urgent, sos ] } }
+        - { name: blood_type_id, in: query, schema: { type: integer, minimum: 1, maximum: 8 } }
+        - { name: city, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: One page of requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { oneOf: [ { $ref: '#/components/schemas/BloodRequest' }, { $ref: '#/components/schemas/OpenBloodRequest' } ] } }
+                  meta: { $ref: '#/components/schemas/ListMeta' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /blood-requests/{id}:
+    get:
+      tags: [ blood-requests ]
+      summary: One request
+      description: Anyone who may not see the request gets 404, so its existence is not revealed.
+      operationId: getBloodRequest
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' } ]
+      responses:
+        '200': { description: The request., content: { application/json: { schema: { type: object, properties: { data: { oneOf: [ { $ref: '#/components/schemas/BloodRequest' }, { $ref: '#/components/schemas/OpenBloodRequest' } ] } } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /blood-requests/{id}/review:
+    patch:
+      tags: [ blood-requests ]
+      summary: Approve or deny a pending request (admins)
+      description: Approving opens the request to donors; an approved SOS alerts every compatible donor who can give blood today. Denying needs a note, which the requester sees.
+      operationId: reviewBloodRequest
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' }, { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ decision ]
+              properties:
+                decision: { type: string, enum: [ approve, deny ] }
+                note: { type: string, maxLength: 255, description: Required when denying. }
+      responses:
+        '200': { description: The reviewed request., content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/BloodRequest' } } } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /blood-requests/{id}/cancel:
+    patch:
+      tags: [ blood-requests ]
+      summary: Cancel a pending or open request (its requester or an admin)
+      description: Donations still waiting on the request are cancelled and their donors told.
+      operationId: cancelBloodRequest
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' }, { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { note: { type: string, maxLength: 255 } } } } }
+      responses:
+        '200': { description: The cancelled request., content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/BloodRequest' } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /blood-requests/{id}/location:
+    patch:
+      tags: [ blood-requests ]
+      summary: Set the treating hospital location on an active request
+      description: Recipients and hospitals may update their own pending or open requests; admins may update any pending or open request. The pin must be the treating hospital inside Lebanon. Open requests with a confirmed hospital pin can appear on the public map, without requester identity.
+      operationId: updateBloodRequestLocation
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' }, { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ latitude, longitude ]
+              properties:
+                latitude: { type: number, minimum: -90, maximum: 90 }
+                longitude: { type: number, minimum: -180, maximum: 180 }
+      responses:
+        '200': { description: Request with the selected hospital location., content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/BloodRequest' } } } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /blood-requests/{id}/matches:
+    get:
+      tags: [ blood-requests ]
+      summary: Donors who can give blood for this request (admins)
+      description: Compatible blood type, active, available, no donation in the last 56 days, not already linked to the request. Nearest first (straight-line km); donors without a location last.
+      operationId: matchDonors
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/idPath' }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Matching donors., content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Match' } } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /blood-requests/{id}/invitations:
+    post:
+      tags: [ blood-requests ]
+      summary: Invite a matching donor to an open request (admins)
+      operationId: inviteDonor
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' }, { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [ donor_id ], properties: { donor_id: { type: integer, minimum: 1 } } } } }
+      responses:
+        '201': { description: The invitation (a donation with status invited)., content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Donation' } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /blood-requests/{id}/dispense:
+    post:
+      tags: [ blood-requests ]
+      summary: Give units from the blood bank to an open request (admins)
+      description: The blood type must be compatible, the units at most those still needed and available in stock. The request is fulfilled when it has all its units.
+      operationId: dispenseUnits
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' }, { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ blood_type_id, units ]
+              properties:
+                blood_type_id: { type: integer, minimum: 1, maximum: 8 }
+                units: { type: integer, minimum: 1, maximum: 50 }
+                note: { type: string, maxLength: 255 }
+      responses:
+        '200': { description: The request after receiving the units., content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/BloodRequest' } } } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /blood-donations:
+    post:
+      tags:
+        - blood-donations
+      summary: Offer to donate, for a request or to the blood bank (donors)
+      description: Leave out request_id to offer to the blood bank. Only one pending or accepted independent offer per donor. An offer requires separate admin acceptance before physical completion. A donor-withdrawn request offer can be submitted again using the same request_id; its existing record returns to pending and requires a fresh admin decision. Admin-cancelled or declined offers cannot be reopened this way.
+      operationId: offerDonation
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                request_id:
+                  type:
+                    - integer
+                    - 'null'
+                  minimum: 1
+      responses:
+        '201':
+          description: The offer (status pending).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Donation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags:
+        - blood-donations
+      summary: List donations (donors their own, admins all)
+      operationId: listDonations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              - created_at
+              - -created_at
+            default: -created_at
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - invited
+              - pending
+              - accepted
+              - completed
+              - declined
+              - cancelled
+        - name: request_id
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: One page of donations.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Donation'
+                  meta:
+                    $ref: '#/components/schemas/ListMeta'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /blood-donations/eligibility:
+    get:
+      tags: [ blood-donations ]
+      summary: Can I donate today? (donors)
+      operationId: myEligibility
+      security: [ { sessionCookie: [] } ]
+      responses:
+        '200': { description: Eligibility today., content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Eligibility' } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /blood-donations/{id}/respond:
+    patch:
+      tags: [ blood-donations ]
+      summary: Accept or decline an invitation (the invited donor)
+      operationId: respondToInvitation
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/idPath' }, { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [ accept ], properties: { accept: { type: boolean } } } } }
+      responses:
+        '200': { description: 'The donation: pending if accepted, declined otherwise.', content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Donation' } } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /blood-donations/{id}/withdraw:
+    patch:
+      tags:
+        - blood-donations
+      summary: Withdraw my pending or accepted offer (donor)
+      operationId: withdrawOffer
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '200':
+          description: The cancelled donation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Donation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /blood-donations/{id}/confirm:
+    patch:
+      tags:
+        - blood-donations
+      summary: Confirm physical donation received after screening (admins)
+      description: Requires accepted status; a pending offer returns 409 and must first pass through /accept. Only use after blood has physically been collected and screened. Sets completed and the donor donation date, starting the 56-day interval. The unit goes to an open linked request or otherwise to blood-bank stock. Repeated or simultaneous confirmations cannot count the unit twice.
+      operationId: confirmDonation
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '200':
+          description: The completed donation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Donation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /blood-donations/{id}/cancel:
+    patch:
+      tags:
+        - blood-donations
+      summary: Cancel an invited, pending or accepted donation with a reason (admin)
+      operationId: cancelDonation
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - $ref: '#/components/parameters/csrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - note
+              properties:
+                note:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+      responses:
+        '200':
+          description: The cancelled donation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Donation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /blood-stock:
+    get:
+      tags: [ blood-stock ]
+      summary: Units in the blood bank per blood type (admins and hospitals)
+      operationId: stockLevels
+      security: [ { sessionCookie: [] } ]
+      responses:
+        '200': { description: Stock per blood type., content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/StockLevel' } } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /blood-stock/movements:
+    get:
+      tags: [ blood-stock ]
+      summary: History of every stock change (admins)
+      operationId: stockMovements
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/page' }
+        - { $ref: '#/components/parameters/limit' }
+        - { name: sort, in: query, schema: { type: string, enum: [ created_at, -created_at ], default: -created_at } }
+        - { name: blood_type_id, in: query, schema: { type: integer, minimum: 1, maximum: 8 } }
+        - { name: reason, in: query, schema: { type: string, enum: [ donation, dispensed, adjustment ] } }
+      responses:
+        '200':
+          description: One page of stock changes.
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/StockMovement' } }, meta: { $ref: '#/components/schemas/ListMeta' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /blood-stock/adjustments:
+    post:
+      tags: [ blood-stock ]
+      summary: Correct the stock by hand, with a reason (admins)
+      description: For example opening stock (+) or expired units discarded (-). The stock never goes below zero.
+      operationId: adjustStock
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/csrfHeader' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ blood_type_id, change_units, note ]
+              properties:
+                blood_type_id: { type: integer, minimum: 1, maximum: 8 }
+                change_units: { type: integer, minimum: -500, maximum: 500, not: { const: 0 } }
+                note: { type: string, minLength: 3, maxLength: 255 }
+            example: { blood_type_id: 8, change_units: 5, note: Opening stock }
+      responses:
+        '201': { description: The new stock level of that blood type., content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/StockLevel' } } } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /calls:
+    get:
+      tags:
+        - calls
+      summary: List medicine appeals
+      operationId: callsListmedicineappeals
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100000
+            default: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum:
+              - created_at
+              - -created_at
+              - quantity
+              - -quantity
+            default: -created_at
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum:
+              - open
+              - closed
+            default: open
+          description: Only admins may list closed calls; other roles always see open calls.
+        - in: query
+          name: medicine_name
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MedicineCall'
+                  meta:
+                    $ref: '#/components/schemas/ListMeta'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+  /calls/{id}:
+    get:
+      tags:
+        - calls
+      summary: Get medicine appeal
+      operationId: callsGetmedicineappeal
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MedicineCall'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Closed calls are visible only to admins; otherwise returns 404.
+  /calls/medicine:
+    post:
+      tags:
+        - calls
+      summary: Create medicine appeal
+      operationId: callsCreatemedicineappeal
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MedicineCallResult'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Admin only. Creates an open call, alerts all active donors, and records an audit event atomically. This step does not implement medicine donations or dispensing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicineCallInput'
+            example:
+              medicine_name: Paracetamol
+              quantity: 20
+              note: Sealed boxes only
+  /calls/blood:
+    post:
+      tags:
+        - calls
+      summary: Create blood appeal
+      operationId: callsCreatebloodappeal
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BloodCallResult'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Admin only. Immediately opens a reviewed blood request. All active, available, compatible donors eligible under the 56-day rule are alerted. No donor limit. Request, alerts and audit event commit together. hospital_name is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BloodRequestInput'
+            example:
+              blood_type_id: 8
+              units_needed: 2
+              urgency: sos
+              hospital_name: LifeLink Hospital
+              city: Beirut
+  /calls/{id}/close:
+    patch:
+      tags:
+        - calls
+      summary: Close medicine appeal
+      operationId: callsClosemedicineappeal
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MedicineCall'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Admin only. Records closed_at and an audit event. Unknown ID returns 404; already closed returns 409. Does not close blood requests; use the blood-request cancellation endpoint.
+  /notifications:
+    get:
+      tags:
+        - notifications
+      summary: List my notifications
+      operationId: notificationsListmynotifications
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100000
+            default: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum:
+              - created_at
+              - -created_at
+            default: -created_at
+        - in: query
+          name: is_read
+          required: false
+          schema:
+            type: string
+            enum:
+              - 'true'
+              - 'false'
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum:
+              - sos
+              - request
+              - invite
+              - response
+              - donation
+              - medicine
+              - thanks
+              - account
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  meta:
+                    $ref: '#/components/schemas/ListMeta'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Only the current account. Supplied user_id is ignored.
+  /notifications/unread-count:
+    get:
+      tags:
+        - notifications
+      summary: Count my unread notifications
+      operationId: notificationsCountmyunreadnotifications
+      security:
+        - sessionCookie: []
+      parameters: []
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      count: &a1
+                        type: integer
+                        minimum: 0
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+  /notifications/read-all:
+    patch:
+      tags:
+        - notifications
+      summary: Read all my notifications
+      operationId: notificationsReadallmynotifications
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      updated: *a1
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+  /notifications/{id}/read:
+    patch:
+      tags:
+        - notifications
+      summary: Read my notification
+      operationId: notificationsReadmynotification
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '204':
+          description: Notification marked read (idempotent).
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Idempotent for an owned notification. Unknown IDs and another account's IDs both return 404.
+  /feed:
+    get:
+      tags:
+        - feed
+      summary: List community donations
+      operationId: feedListcommunitydonations
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100000
+            default: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum:
+              - at
+              - -at
+            default: -at
+        - in: query
+          name: kind
+          required: false
+          schema:
+            type: string
+            enum:
+              - blood
+              - medicine
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FeedItem'
+                  meta:
+                    $ref: '#/components/schemas/ListMeta'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: 'Anonymous events: completed blood donations and approved/dispensed medicine batches only. No donor identity, contact information or home coordinates. IDs are unique together with kind.'
+  /feed/stats:
+    get:
+      tags:
+        - feed
+      summary: Get public landing statistics
+      operationId: feedGetpubliclandingstatistics
+      security: []
+      parameters: []
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PublicStats'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Aggregate confirmed blood donations, approved/dispensed medicine units, active donors, fulfilled requests and blood stock. No personal data.
+  /feed/map:
+    get:
+      tags:
+        - feed
+      summary: List map requests
+      operationId: feedListmaprequests
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: blood_type_id
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 8
+          description: Filter by the requested blood type.
+        - in: query
+          name: urgency
+          required: false
+          schema:
+            type: string
+            enum: [ normal, urgent, sos ]
+        - in: query
+          name: city
+          required: false
+          schema:
+            type: string
+            maxLength: 60
+          description: Match part of the hospital city name. Filtering happens before pagination.
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100000
+            default: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum:
+              - created_at
+              - -created_at
+            default: -created_at
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MapRequest'
+                  meta:
+                    $ref: '#/components/schemas/ListMeta'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Open hospital/admin requests with stored coordinates and recipient requests with an explicitly confirmed treating-hospital pin. Legacy recipient coordinates stay hidden until confirmed. No account identity or account-coordinate fallback. Follow pagination for all map markers.
+  /admin/stats:
+    get:
+      tags:
+        - admin
+      summary: Get admin dashboard statistics
+      operationId: adminGetadmindashboardstatistics
+      security:
+        - sessionCookie: []
+      parameters: []
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AdminStats'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Admin only. Pending review counts, open calls and requests, confirmed donations, blood stock, urgency distribution, and daily submission counts over 14 UTC dates. Medicines counts remain zero until that module is implemented or records exist.
+  /admin/audit-logs:
+    get:
+      tags:
+        - admin
+      summary: List security audit history
+      operationId: adminListsecurityaudithistory
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100000
+            default: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum:
+              - created_at
+              - -created_at
+            default: -created_at
+        - in: query
+          name: action
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 60
+        - in: query
+          name: entity
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 40
+        - in: query
+          name: user_id
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 4294967295
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  meta:
+                    $ref: '#/components/schemas/ListMeta'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: Database unavailable; standard error envelope.
+      description: Admin only. Read-only audit history; contains account IDs and IP addresses. No passwords or tokens.
+
+  /blood-donations/{id}/accept:
+    patch:
+      tags:
+        - blood-donations
+      summary: Accept an offer and arrange collection (admins)
+      description: Changes pending to accepted and records accepted_at, a donor notification and an audit event. Does NOT add blood units, publish a feed event or start the 56-day waiting period. Only active, available, eligible donors can be accepted; a linked request must still be open. No body required. A repeated acceptance returns 409.
+      operationId: acceptDonationOffer
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '200':
+          description: The accepted donation, with accepted_at. reviewed_at is unchanged.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Donation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /medicines/categories:
+    get:
+      tags:
+        - Medicines
+      summary: List medicine categories
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MedicineCategory"
+        '400':
+          description: Invalid input
+        '401':
+          description: Sign in required
+        '403':
+          description: Forbidden
+        '404':
+          description: Record not found
+        '409':
+          description: State conflict
+      operationId: listMedicineCategories
+  /medicines:
+    get:
+      tags:
+        - Medicines
+      summary: List own donations as donor or all donations as admin
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MedicineBatch"
+                  meta:
+                    $ref: "#/components/schemas/ListMeta"
+        '400':
+          description: Invalid input
+        '401':
+          description: Sign in required
+        '403':
+          description: Forbidden
+        '404':
+          description: Record not found
+        '409':
+          description: State conflict
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - pending
+              - approved
+              - rejected
+              - expired
+              - dispensed
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - created_at
+              - -created_at
+      operationId: listMedicineBatches
+    post:
+      tags:
+        - Medicines
+      summary: Submit a medicine donation for review (donor)
+      security:
+        - sessionCookie: []
+      responses:
+        '201':
+          description: Donation submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MedicineBatch"
+        '400':
+          description: Invalid input
+        '401':
+          description: Sign in required
+        '403':
+          description: Forbidden
+        '404':
+          description: Record not found
+        '409':
+          description: State conflict
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Test medicine
+                category_id:
+                  type: integer
+                  minimum: 1
+                  example: 1
+                quantity_donated:
+                  type: integer
+                  minimum: 1
+                  example: 3
+                expiry_date:
+                  type: string
+                  format: date
+                  example: 2030-01-01
+                description:
+                  type: string
+                photo_url:
+                  type: string
+                  format: uri
+                call_id:
+                  type: integer
+                  minimum: 1
+              required:
+                - name
+                - category_id
+                - quantity_donated
+                - expiry_date
+      operationId: submitMedicineBatch
+  /medicines/{id}/review:
+    patch:
+      tags:
+        - Medicines
+      summary: Approve or reject a medicine donation (admin)
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MedicineBatch"
+        '400':
+          description: Invalid input
+        '401':
+          description: Sign in required
+        '403':
+          description: Forbidden
+        '404':
+          description: Record not found
+        '409':
+          description: State conflict
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: '#/components/parameters/csrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision:
+                  type: string
+                  enum:
+                    - approve
+                    - reject
+                note:
+                  type: string
+                  description: Required when rejecting
+              required:
+                - decision
+      operationId: reviewMedicineBatch
+
+  /medicines/{id}:
+    get:
+      tags: [ Medicines ]
+      summary: Look up a medicine batch by ID (admin)
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Medicine batch and its current status, content: { application/json: { schema: { type: object, required: [ data ], properties: { data: { $ref: "#/components/schemas/MedicineBatch" } } } } } }
+        '401': { description: Sign in required }
+        '403': { description: Admin role required }
+        '404': { description: Batch not found }
+      operationId: getMedicineBatch
+  /medicines/{id}/qr:
+    get:
+      tags: [ Medicines ]
+      summary: Download an approved batch's QR label (admin)
+      description: Scans as lifelink:medication:<id>:exp:<YYYY-MM-DD>. Use the scanned ID to look up the batch's current status.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: PNG QR label
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '401': { description: Sign in required }
+        '403': { description: Admin role required }
+        '404': { description: Batch not found }
+        '409': { description: Batch is not approved }
+      operationId: getMedicineQrLabel
+
+  /medicines/available:
+    get:
+      tags: [ Medicines ]
+      summary: List approved, unexpired batches with stock (patient, hospital, admin)
+      security:
+        - sessionCookie: []
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { in: query, name: sort, schema: { type: string, enum: [ expiry_date, -expiry_date ] } }
+      responses:
+        '200': { description: Available batches and pagination, content: { application/json: { schema: { type: object, required: [ data, meta ], properties: { data: { type: array, items: { $ref: "#/components/schemas/AvailableMedicine" } }, meta: { $ref: "#/components/schemas/ListMeta" } } } } } }
+        '401': { description: Sign in required }
+        '403': { description: Role cannot view medicine availability }
+      operationId: listAvailableMedicines
+  /medicine-requests:
+    get:
+      tags: [ Medicines ]
+      summary: List own requests as patient or hospital, or all as admin
+      security:
+        - sessionCookie: []
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { in: query, name: sort, schema: { type: string, enum: [ created_at, -created_at ] } }
+        - { in: query, name: status, schema: { type: string, enum: [ pending, approved, rejected, cancelled ] } }
+      responses:
+        '200': { description: Requests and pagination, content: { application/json: { schema: { type: object, required: [ data, meta ], properties: { data: { type: array, items: { $ref: "#/components/schemas/MedicineRequest" } }, meta: { $ref: "#/components/schemas/ListMeta" } } } } } }
+        '401': { description: Sign in required }
+        '403': { description: Role cannot view requests }
+      operationId: listMedicineRequests
+    post:
+      tags: [ Medicines ]
+      summary: Request units from an available batch (patient or hospital)
+      description: Creates a pending request. The request does not reserve or deduct stock.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ medicine_id, quantity ]
+              properties:
+                medicine_id: { type: integer, minimum: 1, example: 1 }
+                quantity: { type: integer, minimum: 1, maximum: 10000, example: 2 }
+      responses:
+        '201': { description: Pending request, content: { application/json: { schema: { type: object, required: [ data ], properties: { data: { $ref: "#/components/schemas/MedicineRequest" } } } } } }
+        '400': { description: Invalid input }
+        '401': { description: Sign in required }
+        '403': { description: Patient or hospital role required }
+        '404': { description: Batch not found }
+        '409': { description: Batch or requested quantity unavailable }
+      operationId: submitMedicineRequest
+
+  /medicine-requests/{id}/dispense:
+    patch:
+      tags: [ Medicines ]
+      summary: Record physical handoff of medicine and deduct stock (admin)
+      description: A successful handoff sets the request status to approved and returns the remaining batch quantity. A batch with no units remaining becomes dispensed.
+      security:
+        - sessionCookie: []
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer, minimum: 1 } }
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '200': { description: Approved request with remaining batch quantity, content: { application/json: { schema: { type: object, required: [ data ], properties: { data: { $ref: "#/components/schemas/MedicineRequest" } } } } } }
+        '400': { description: Invalid ID }
+        '401': { description: Sign in required }
+        '403': { description: Admin role required }
+        '404': { description: Request not found }
+        '409': { description: Request already processed or batch stock unavailable or expired }
+      operationId: dispenseMedicineRequest
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: ll_session
+      description: httpOnly session cookie set by POST /auth/login.
+
+  parameters:
+    idPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    csrfHeader:
+      name: X-Requested-With
+      in: header
+      required: true
+      description: Must be exactly LifeLink on every request that changes data.
+      schema: { type: string, const: LifeLink }
+
+  schemas:
+    MedicineCallInput:
+      type: object
+      properties:
+        medicine_name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100000
+        note:
+          type:
+            - string
+            - 'null'
+          maxLength: 300
+      required:
+        - medicine_name
+        - quantity
+    MedicineCall:
+      type: object
+      properties:
+        id: &a1
+          type: integer
+          minimum: 0
+        medicine_name: &a3
+          type: string
+        quantity: *a1
+        note: &a4
+          type:
+            - string
+            - 'null'
+        status:
+          type: string
+          enum:
+            - open
+            - closed
+        closed_at: &a2
+          type:
+            - string
+            - 'null'
+          format: date-time
+        created_at: *a2
+    MedicineCallResult:
+      type: object
+      properties:
+        call:
+          $ref: '#/components/schemas/MedicineCall'
+        notified: *a1
+    BloodCallResult:
+      type: object
+      properties:
+        id: *a1
+        status:
+          type: string
+          const: open
+        notified: *a1
+    Notification:
+      type: object
+      properties:
+        id: *a1
+        type:
+          type: string
+          enum:
+            - sos
+            - request
+            - invite
+            - response
+            - donation
+            - medicine
+            - thanks
+            - account
+        message: *a3
+        link: *a4
+        is_read:
+          type: boolean
+        created_at: *a2
+    FeedItem:
+      type: object
+      properties:
+        id: *a1
+        kind:
+          type: string
+          enum:
+            - blood
+            - medicine
+        title: *a3
+        quantity: *a1
+        at: *a2
+        city: *a4
+    MapRequest:
+      type: object
+      properties:
+        id: *a1
+        hospital_name: *a3
+        city: *a4
+        latitude:
+          type: number
+        longitude:
+          type: number
+        urgency:
+          type: string
+          enum:
+            - normal
+            - urgent
+            - sos
+        units_needed: *a1
+        units_received: *a1
+        blood_type: *a3
+    AuditLog:
+      type: object
+      properties:
+        id: *a1
+        user_id:
+          type:
+            - integer
+            - 'null'
+        action: *a3
+        entity: *a4
+        entity_id:
+          type:
+            - integer
+            - 'null'
+        ip_address: *a4
+        created_at: *a2
+    PublicStats:
+      type: object
+      properties:
+        blood_donations: *a1
+        medicines: *a1
+        donors: *a1
+        fulfilled: *a1
+        stock: &a5
+          type: array
+          items:
+            type: object
+            properties:
+              blood_type: *a3
+              units_available: *a1
+    AdminStats:
+      type: object
+      properties:
+        open_requests: &a1
+          type: integer
+          minimum: 0
+        pending_requests: *a1
+        pending_donations: *a1
+        completed_donations: *a1
+        pending_medicines: *a1
+        pending_medicine_requests: *a1
+        open_medicine_calls: *a1
+        donors: *a1
+        stock:
+          type: array
+          items:
+            type: object
+            properties:
+              blood_type: &a2
+                type: string
+              units_available: *a1
+        daily:
+          type: array
+          description: UTC dates for the last 14 days; dates with no events are omitted.
+          items:
+            type: object
+            properties:
+              d:
+                type: string
+                format: date
+              n: *a1
+        urgency:
+          type: array
+          items:
+            type: object
+            properties:
+              urgency: *a2
+              n: *a1
+        accepted_donations:
+          type: integer
+          minimum: 0
+          description: Offers accepted and awaiting physical collection/completion.
+    Error:
+      type: object
+      required: [ error ]
+      properties:
+        error:
+          type: object
+          required: [ code, message ]
+          properties:
+            code:
+              type: string
+              examples: [ VALIDATION_ERROR, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, RATE_LIMITED ]
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+    ListMeta:
+      type: object
+      required: [ page, limit, total, pages ]
+      properties:
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        pages: { type: integer, minimum: 1 }
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        full_name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [ donor, recipient, hospital, admin ] }
+        phone: { type: [ string, 'null' ] }
+        city: { type: [ string, 'null' ] }
+        latitude: { type: [ number, 'null' ] }
+        longitude: { type: [ number, 'null' ] }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        donor:
+          description: Only for donors; null for every other role.
+          oneOf:
+            - type: 'null'
+            - type: object
+              properties:
+                blood_type_id: { type: integer, minimum: 1, maximum: 8 }
+                blood_type: { type: string, examples: [ O- ] }
+                last_donation_date: { type: [ string, 'null' ], format: date }
+                is_available: { type: boolean }
+    RegisterInput:
+      type: object
+      description: Hospital accounts require both coordinates, inside Lebanon. Coordinates are optional for other roles.
+      required: [ full_name, email, password, role, city ]
+      properties:
+        full_name: { type: string, minLength: 2, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+        role: { type: string, enum: [ donor, recipient, hospital ] }
+        city: { type: string, minLength: 2, maxLength: 60 }
+        phone: { type: string, description: 'For example +961 3 123 456' }
+        latitude: { type: number, minimum: -90, maximum: 90, description: Send together with longitude. }
+        longitude: { type: number, minimum: -180, maximum: 180, description: Send together with latitude. }
+        blood_type_id: { type: integer, minimum: 1, maximum: 8, description: 'Required for donors. 1 A+, 2 A-, 3 B+, 4 B-, 5 AB+, 6 AB-, 7 O+, 8 O-' }
+    LoginInput:
+      type: object
+      required: [ email, password ]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, maxLength: 128 }
+    ProfileUpdate:
+      type: object
+      description: Hospital coordinates must remain a complete pin inside Lebanon and cannot be cleared. Changing a saved profile pin does not move earlier blood requests.
+      properties:
+        full_name: { type: string, minLength: 2, maxLength: 100 }
+        phone:
+          type: [ string, 'null' ]
+          description: A phone number such as +961 3 123 456. Send null or blank text to remove it; omit to keep it unchanged.
+        city: { type: string, minLength: 2, maxLength: 60 }
+        latitude: { type: [ number, 'null' ], minimum: -90, maximum: 90 }
+        longitude: { type: [ number, 'null' ], minimum: -180, maximum: 180 }
+        is_available: { type: boolean, description: Donors only. }
+    PasswordChange:
+      type: object
+      required: [ current_password, new_password ]
+      properties:
+        current_password: { type: string }
+        new_password: { type: string, minLength: 8, maxLength: 128 }
+    BloodType:
+      type: object
+      properties: { id: { type: integer }, label: { type: string, examples: [ O- ] } }
+    BloodRequestInput:
+      type: object
+      description: Use treating-hospital coordinates. Hospitals may omit them to reuse their saved pin; recipient profile coordinates are never used as a fallback.
+      required: [ blood_type_id, units_needed, hospital_name ]
+      properties:
+        blood_type_id: { type: integer, minimum: 1, maximum: 8 }
+        units_needed: { type: integer, minimum: 1, maximum: 50 }
+        urgency: { type: string, enum: [ normal, urgent, sos ], default: normal }
+        hospital_name: { type: string, minLength: 2, maxLength: 120 }
+        city: { type: string, minLength: 2, maxLength: 60 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+    BloodRequest:
+      type: object
+      description: Full view, for the requester and admins.
+      properties:
+        id: { type: integer }
+        blood_type_id: { type: integer }
+        blood_type: { type: string }
+        units_needed: { type: integer }
+        units_received: { type: integer }
+        urgency: { type: string, enum: [ normal, urgent, sos ] }
+        hospital_name: { type: string }
+        city: { type: [ string, 'null' ] }
+        latitude: { type: [ number, 'null' ] }
+        longitude: { type: [ number, 'null' ] }
+        has_hospital_pin: { type: boolean, description: Coordinates explicitly identify the treating hospital. }
+        status: { type: string, enum: [ pending, open, fulfilled, cancelled ] }
+        admin_note: { type: [ string, 'null' ] }
+        created_at: { type: string, format: date-time }
+        reviewed_at: { type: [ string, 'null' ], format: date-time }
+        requester: { type: object, properties: { id: { type: integer }, full_name: { type: string } } }
+    OpenBloodRequest:
+      type: object
+      description: What donors see. No requester identity or admin note; my_response is the donor's own answer, if any.
+      properties:
+        id: { type: integer }
+        blood_type_id: { type: integer }
+        blood_type: { type: string }
+        units_needed: { type: integer }
+        units_received: { type: integer }
+        urgency: { type: string, enum: [ normal, urgent, sos ] }
+        hospital_name: { type: string }
+        city: { type: [ string, 'null' ] }
+        latitude: { type: [ number, 'null' ] }
+        longitude: { type: [ number, 'null' ] }
+        has_hospital_pin: { type: boolean, description: Coordinates explicitly identify the treating hospital. }
+        created_at: { type: string, format: date-time }
+        can_offer_again: { type: boolean, description: 'A withdrawn offer may be submitted again for a fresh admin decision.' }
+        my_response: { type: [ string, 'null' ], enum: [ invited, pending, accepted, completed, declined, cancelled, null ] }
+    Donation:
+      type: object
+      properties:
+        can_offer_again: { type: boolean, description: Only a donor-withdrawn offer can be submitted again for fresh admin review. }
+        id:
+          type: integer
+        status:
+          type: string
+          enum:
+            - invited
+            - pending
+            - accepted
+            - completed
+            - declined
+            - cancelled
+        admin_note:
+          type:
+            - string
+            - 'null'
+        created_at:
+          type: string
+          format: date-time
+        reviewed_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        donor:
+          type: object
+          properties:
+            id:
+              type: integer
+            full_name:
+              type: string
+            blood_type:
+              type: string
+        request:
+          description: null for a donation to the blood bank.
+          oneOf:
+            - type: 'null'
+            - type: object
+              properties:
+                id:
+                  type: integer
+                hospital_name:
+                  type: string
+                city:
+                  type:
+                    - string
+                    - 'null'
+                blood_type:
+                  type: string
+                urgency:
+                  type: string
+                status:
+                  type: string
+        accepted_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the admin accepted the offer; NULL for earlier records with no acceptance history.
+    Match:
+      type: object
+      properties:
+        donor_id: { type: integer }
+        full_name: { type: string }
+        blood_type: { type: string }
+        city: { type: [ string, 'null' ] }
+        distance_km: { type: [ number, 'null' ], description: 'Straight-line distance to the request; null when either side has no location.' }
+        last_donation_date: { type: [ string, 'null' ], format: date }
+    Eligibility:
+      type: object
+      properties:
+        eligible: { type: boolean }
+        last_donation_date: { type: [ string, 'null' ], format: date }
+        next_eligible_date: { type: string, format: date }
+        days_remaining: { type: integer, minimum: 0 }
+        interval_days: { type: integer, examples: [ 56 ] }
+    StockLevel:
+      type: object
+      properties:
+        blood_type_id: { type: integer }
+        blood_type: { type: string }
+        units_available: { type: integer, minimum: 0 }
+        updated_at: { type: string, format: date-time }
+    StockMovement:
+      type: object
+      properties:
+        id: { type: integer }
+        blood_type: { type: string }
+        change_units: { type: integer, description: 'Positive when units came in, negative when they went out.' }
+        reason: { type: string, enum: [ donation, dispensed, adjustment ] }
+        donation_id: { type: [ integer, 'null' ] }
+        request_id: { type: [ integer, 'null' ] }
+        created_by: { type: [ string, 'null' ] }
+        note: { type: [ string, 'null' ] }
+        created_at: { type: string, format: date-time }
+    Health:
+      type: object
+      required: [ status, database, version, uptime_seconds, time ]
+      properties:
+        status: { type: string, enum: [ ok, degraded ] }
+        database: { type: string, enum: [ up, down ] }
+        version: { type: string }
+        uptime_seconds: { type: integer }
+        time: { type: string, format: date-time }
+    MedicineCategory:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 255
+        name:
+          type: string
+    MedicineBatch:
+      type: object
+      description: A full donation batch visible to its donor or an admin. Stock starts at zero until approval.
+      required:
+        - id
+        - donor_id
+        - category_id
+        - name
+        - quantity_donated
+        - quantity_available
+        - expiry_date
+        - status
+      properties:
+        id: &a6
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+        donor_id: *a6
+        category_id:
+          type: integer
+          minimum: 1
+          maximum: 255
+        call_id: &a8
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 4294967295
+        name:
+          type: string
+          maxLength: 120
+        description: &a7
+          type:
+            - string
+            - "null"
+        quantity_donated:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        quantity_available:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        expiry_date:
+          type: string
+          format: date
+        photo_url:
+          type:
+            - string
+            - "null"
+          format: uri
+        status:
+          type: string
+          enum:
+            - pending
+            - approved
+            - rejected
+            - expired
+            - dispensed
+        admin_note: *a7
+        reviewed_by: *a8
+        reviewed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AvailableMedicine:
+      type: object
+      description: Approved, unexpired stock. This public-to-authorized-roles view excludes donor identity and admin notes.
+      required:
+        - id
+        - category_id
+        - name
+        - quantity_available
+        - expiry_date
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+        category_id:
+          type: integer
+          minimum: 1
+          maximum: 255
+        name:
+          type: string
+        description:
+          type:
+            - string
+            - "null"
+        quantity_available:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        expiry_date:
+          type: string
+          format: date
+        photo_url:
+          type:
+            - string
+            - "null"
+          format: uri
+    MedicineRequest:
+      type: object
+      required:
+        - id
+        - requester_id
+        - medicine_id
+        - quantity
+        - status
+      properties:
+        id: &a6
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+        requester_id: *a6
+        medicine_id: *a6
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        status:
+          type: string
+          enum:
+            - pending
+            - approved
+            - rejected
+            - cancelled
+          description: Approved means the admin recorded the physical medicine handoff.
+        admin_note:
+          type:
+            - string
+            - "null"
+        reviewed_by:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+          maximum: 4294967295
+        reviewed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        medicine_name:
+          type: string
+          description: Included when listing requests.
+        quantity_available:
+          type: integer
+          minimum: 0
+          maximum: 10000
+          description: Remaining batch stock; included in the dispense response.
+
+  responses:
+    ValidationError:
+      description: A field is missing or not valid (code VALIDATION_ERROR, BAD_JSON).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: VALIDATION_ERROR, message: Some fields are not valid., details: [ { field: email, message: Invalid value } ] } }
+    Unauthenticated:
+      description: Not signed in, or the session expired (code UNAUTHENTICATED).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Signed in, but this role may not do this (code FORBIDDEN), or the CSRF header is missing (code CSRF_HEADER_MISSING).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: The record does not exist (code NOT_FOUND).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: The action clashes with the current state, for example a duplicate (code CONFLICT).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Too many requests from this address (code RATE_LIMITED).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
