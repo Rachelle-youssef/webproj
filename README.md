@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # LifeLink - step 5: blood and medicine donation platform
 
 Web Programming I final project, built with the 3-tier architecture taught in the course:
@@ -582,3 +583,6 @@ Never share, commit or zip your `.env` file: it holds your passwords.
 
 
 
+=======
+# webproj
+>>>>>>> 3501672c4bd0325479397c675a231022d82be5bf
