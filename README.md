@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # LifeLink - step 5: blood and medicine donation platform
 
 Web Programming I final project, built with the 3-tier architecture taught in the course:
@@ -568,21 +567,3 @@ Never share, commit or zip your `.env` file: it holds your passwords.
 ## Known notes
 
 - `npm audit` reports 0 problems in the packages the API runs on. It lists moderate warnings inside Jest (the test tool, development only) from the `sprintf-js` package, which has no fixed version yet; they never reach production.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-=======
-# webproj
->>>>>>> 3501672c4bd0325479397c675a231022d82be5bf
