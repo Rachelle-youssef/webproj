@@ -1816,6 +1816,36 @@ paths:
         '409': { description: Request already processed or batch stock unavailable or expired }
       operationId: dispenseMedicineRequest
 
+  /hospital-locations:
+    get:
+      tags: [ reference ]
+      summary: Find a hospital in Lebanon by name and city
+      description: Public so hospital signup can use it. Button-triggered searches only, with shared throttling and caching. Returns hospital candidates inside Lebanon; never a city-centre fallback. No account or request is saved by searching. Multiple results require a choice; an empty result leaves the current pin unchanged.
+      operationId: findHospitalLocations
+      parameters:
+        - { name: name, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 120 } }
+        - { name: city, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 60 } }
+      responses:
+        '200':
+          description: Up to five hospital candidates. Data is attributed to OpenStreetMap contributors.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        address: { type: string }
+                        latitude: { type: number }
+                        longitude: { type: number }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { description: Search provider unavailable or busy. Manual pin placement remains available. }
+
 components:
   securitySchemes:
     sessionCookie:

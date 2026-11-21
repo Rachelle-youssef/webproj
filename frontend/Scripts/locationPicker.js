@@ -11,6 +11,13 @@ export function mountLocationPicker(container, form, options = {}) {
   let initialPoint = options.initialPoint || null;
   container.innerHTML = `<div class="location-picker"><b data-picker-title></b>
     <p class="mute" data-picker-description></p>
+    <div class="hospital-search" data-hospital-search>
+      <div data-search-fields></div>
+      <button class="btn ghost sm" type="button" data-find-hospital>Find hospital on map</button>
+      <p class="mute">Search by hospital name and city, then check the pin. You can still move it on the map.</p>
+      <p data-search-message role="status" hidden></p><div data-search-results></div>
+      <small>Hospital search: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></small>
+    </div>
     <div class="location-picker-map" data-location-map role="region" aria-label="Choose hospital location in Lebanon"></div>
     <p data-location-message role="status">Loading Lebanon map…</p>
     ${showCoordinates ? '<details class="coordinate-details"><summary>Enter coordinates instead</summary>' : '<div hidden>'}
@@ -23,6 +30,34 @@ export function mountLocationPicker(container, form, options = {}) {
   const message = container.querySelector('[data-location-message]');
   const latitude = form.elements.latitude;
   const longitude = form.elements.longitude;
+  const searchFields = container.querySelector('[data-search-fields]');
+  let nameField = form.elements.hospital_name || form.elements.full_name;
+  let cityField = form.elements.city;
+  if (!nameField) {
+    const label = document.createElement('label');
+    label.textContent = 'Hospital name';
+    nameField = document.createElement('input');
+    nameField.type = 'text';
+    nameField.maxLength = 120;
+    nameField.value = options.hospitalName || '';
+    label.append(nameField);
+    searchFields.append(label);
+  }
+  if (!cityField) {
+    const label = document.createElement('label');
+    label.textContent = 'Hospital city';
+    cityField = document.createElement('input');
+    cityField.type = 'text';
+    cityField.maxLength = 60;
+    cityField.value = options.city || '';
+    label.append(cityField);
+    searchFields.append(label);
+  }
+  const findButton = container.querySelector('[data-find-hospital]');
+  const searchMessage = container.querySelector('[data-search-message]');
+  const searchResults = container.querySelector('[data-search-results]');
+  let searchVersion = 0;
+  let searchedPoint = null;
   let boundary, map, leaflet, marker, observer, resizeMap;
   let disposed = false;
   let initializing = false;
@@ -65,6 +100,10 @@ export function mountLocationPicker(container, form, options = {}) {
     }
   }
   function select(point) {
+    searchedPoint = null;
+    searchVersion++; // A manual choice wins over any search still loading.
+    searchResults.replaceChildren();
+    searchMessage.hidden = true;
     const selectedLatitude = Number(point.lat.toFixed(6)),
       selectedLongitude = Number(point.lng.toFixed(6));
     if (!containsLocation(boundary, selectedLatitude, selectedLongitude)) {
@@ -91,6 +130,7 @@ export function mountLocationPicker(container, form, options = {}) {
     }
   };
   function setLocation(point, remember = false) {
+    searchedPoint = null;
     if (remember) {
       initialPoint = point;
       latitude.defaultValue = point?.[0] ?? '';
@@ -100,7 +140,91 @@ export function mountLocationPicker(container, form, options = {}) {
     longitude.value = point?.[1] ?? '';
     syncMarker();
   }
-  const reset = () => setLocation(initialPoint);
+  const reset = () => {
+    searchVersion++;
+    searchResults.replaceChildren();
+    searchMessage.hidden = true;
+    setLocation(initialPoint);
+  };
+
+  function showSearchMessage(text, error = false) {
+    searchMessage.textContent = text;
+    searchMessage.hidden = false;
+    searchMessage.classList.toggle('donor-error', error);
+  }
+
+  function chooseHospital(hospital) {
+    if (!boundary || !containsLocation(boundary, hospital.latitude, hospital.longitude)) {
+      showSearchMessage(
+        'This result is outside Lebanon. Select the hospital on the map.',
+        true
+      );
+      return;
+    }
+    setLocation([hospital.latitude, hospital.longitude]);
+    searchedPoint = [hospital.latitude, hospital.longitude];
+    if (map) map.setView(searchedPoint, 15, { animate: false });
+    searchResults.replaceChildren();
+    showSearchMessage(
+      'Pin placed at ' + hospital.name + '. Check the location before saving.'
+    );
+  }
+
+  async function findHospital() {
+    const name = nameField.value.trim();
+    const city = cityField.value.trim();
+    searchResults.replaceChildren();
+    if (name.length < 2 || city.length < 2) {
+      showSearchMessage('Enter the hospital name and city above, then search.', true);
+      return;
+    }
+    const version = ++searchVersion;
+    findButton.disabled = true;
+    showSearchMessage('Finding the hospital…');
+    try {
+      const query = new URLSearchParams({ name, city });
+      const hospitals = await api('/hospital-locations?' + query);
+      boundary = await getLebanonBoundary();
+      if (disposed || version !== searchVersion) return;
+      if (name !== nameField.value.trim() || city !== cityField.value.trim()) {
+        showSearchMessage(
+          'The hospital details changed. Search again to find the new location.'
+        );
+        return;
+      }
+      if (hospitals.length === 0) {
+        showSearchMessage(
+          'No hospital found with that name and city. Try another spelling or select it on the map. Your existing pin has not changed.'
+        );
+      } else if (hospitals.length === 1) {
+        chooseHospital(hospitals[0]);
+      } else {
+        showSearchMessage('Several hospitals match. Choose the correct address:');
+        for (const hospital of hospitals) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'hospital-search-result';
+          button.textContent = hospital.name + ' — ' + hospital.address;
+          button.addEventListener('click', () => {
+            if (name !== nameField.value.trim() || city !== cityField.value.trim()) {
+              searchResults.replaceChildren();
+              showSearchMessage(
+                'The hospital details changed. Search again to find the new location.'
+              );
+              return;
+            }
+            chooseHospital(hospital);
+          });
+          searchResults.append(button);
+        }
+      }
+    } catch (error) {
+      if (!disposed && version === searchVersion) showSearchMessage(error.message, true);
+    } finally {
+      if (!disposed) findButton.disabled = false;
+    }
+  }
+  findButton.addEventListener('click', findHospital);
   if (initialPoint) {
     latitude.defaultValue = initialPoint[0];
     longitude.defaultValue = initialPoint[1];
@@ -134,6 +258,7 @@ export function mountLocationPicker(container, form, options = {}) {
       map.on('click', (event) => select(event.latlng));
       resizeMap = result.resize;
       syncMarker();
+      if (searchedPoint) map.setView(searchedPoint, 15, { animate: false });
     } catch {
       if (!disposed) {
         report(
@@ -148,7 +273,12 @@ export function mountLocationPicker(container, form, options = {}) {
   observer = new ResizeObserver(() => {
     if (!disposed) {
       if (map) {
+        const center = map.getCenter();
+        const zoom = map.getZoom();
         resizeMap();
+        // Resizing must not zoom away from the hospital the user just found.
+        if (marker)
+          map.setView(center, Math.max(zoom, map.getMinZoom()), { animate: false });
       } else {
         initialize();
       }
@@ -169,6 +299,8 @@ export function mountLocationPicker(container, form, options = {}) {
     setLocation,
     dispose() {
       disposed = true;
+      searchVersion++;
+      findButton.removeEventListener('click', findHospital);
       observer?.disconnect();
       map?.remove();
       form.removeEventListener('submit', validate, true);
@@ -192,7 +324,8 @@ export function openLocationEditor(row, onSaved, onSessionExpired) {
   const form = dialog.querySelector('form');
   const picker = mountLocationPicker(
     dialog.querySelector('[data-location-picker]'),
-    form
+    form,
+    { hospitalName: row.hospital_name, city: row.city }
   );
   if (row.latitude != null && row.longitude != null) {
     form.elements.latitude.value = row.latitude;

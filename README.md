@@ -7,6 +7,30 @@ Web Programming I final project, built with the 3-tier architecture taught in th
 
 The testing and requirements guides are supplied separately to keep the original ZIP folder structure.
 
+## Hospital name and city search — November 21, 2026
+
+Hospital signup, hospital account details, blood-request forms and the request pin editor now share **Find hospital on map**. Enter the hospital name and city in the form and press that button. One matching hospital automatically places and zooms to its pin. With several results, choose the correct address. The pin can still be moved manually, and changing the map does not submit the form. Save/submit normally afterward. Hospital profile pins continue to be reused for new requests.
+
+For example, `Rizk Hospital` and `Beirut` returned a hospital pin in a live verification. OpenStreetMap does not index every hospital name or spelling: no result means try another spelling or use the manual pin, not that the hospital does not exist. Search will never substitute the city centre. Existing pins remain unchanged on no-result/provider-failure responses. Only candidates inside the actual Lebanon boundary are returned.
+
+### Update your existing installation
+
+Restart the backend from this repository (`C:\Users\Dell\webproj\backend`) and press Ctrl+F5 in the browser. Keep your existing private `.env`. No dependency installation or database migration is required for this update. If you previously ran LifeLink from a Downloads folder, start the server from the Git repository to use these changes.
+
+### How the search code fits the project
+
+`frontend/Scripts/locationPicker.js` → `GET /api/v1/hospital-locations?name=...&city=...` → `PL/controllers/reference.controller.js` → `BLL/locations.bll.js` → `DAL/locations.dal.js`.
+
+The DAL calls the configured external provider and returns location DTOs; the BLL checks the Lebanon boundary through the existing database geometry query. Searching does not create accounts, requests, invitations or database records. Swagger documents the new public endpoint, which is also available before hospital registration.
+
+### OpenStreetMap service choice and limits
+
+The project developer explicitly selected the free Nominatim service on November 21, 2026. Its [usage policy](https://operations.osmfoundation.org/policies/nominatim/) requires identification, attribution and a maximum of one request per second across the application; it forbids autocomplete. LifeLink therefore searches only on a button click, uses an identifying User-Agent, serialises outbound requests at 1.1-second spacing and caches up to 500 searches for 24 hours. Repeated concurrent searches share one request; the pending queue is bounded and the public route allows 15 requests per minute per IP.
+
+Only the hospital name and city are sent to the provider. No patient identity, account email, password or session is sent. Provider attribution is visible beside the search. Requests time out after eight seconds and manual pin placement remains available during an outage. The cache/throttle apply to the current Node process: use one app instance with the public service, or replace this with shared throttling/a provider suitable for a larger deployment.
+
+`GEOCODING_URL` in `.env.example` documents the optional compatible provider URL; the default works with an existing `.env` and requires no API key. This allows switching the provider without changing the source. Official [search parameters](https://nominatim.org/release-docs/latest/api/Search/) describe the provider interface.
+
 ## Matched donor form fix — November 19, 2026
 
 The admin can now close the matched-donor form with **Cancel**, or by pressing **Find matching donors** again. This sends no invitation. Reopening fetches current matching donors; pressing **Invite donor** still sends the selected invitation normally. The empty matching result can also be closed. A late response after navigating away is ignored.

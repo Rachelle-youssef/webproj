@@ -1,3 +1,15 @@
+# Hospital search verification — November 21, 2026
+
+- **349 backend tests passed across 23 suites.** New coverage includes Lebanon-only query parameters, identifying provider headers, numeric DTOs, provider cache/deduplication, serialised one-second request spacing, removal of city/foreign/invalid/duplicate results, provider failures, input validation, the public registration lookup, and the actual Lebanon boundary filter.
+- **Nine focused search UI groups passed** using controlled API fixtures for single/multiple/no results, outages and invalid locations; stale edits; manual pinning during a pending lookup; the pin editor; hospital signup; and hospital-profile search at 390/768/1440 widths in both themes. Automatic zoom and preserving it during resize were checked.
+- **16 connected regression groups passed** for signup, profiles/passwords, hospital and patient pins, admin queue links/reviews, withdrawal/re-offering, cancellation wording, map popups, medicine approval/dispensing, QR image lookup and blood collection counted once.
+- A live provider-to-DAL-to-BLL-to-QA-database lookup found **Rizk Hospital, Beirut** at latitude 33.8853794 and longitude 35.515179. Some other English hospital names returned no result, which is why manual placement and explicit no-result handling are retained. The initial sandboxed server could not reach the provider; the live check was repeated from an authorised network-enabled process.
+- The endpoint inventory now contains **56 API operations / 52 paths**, 31 schemas and 291 resolved internal schema references. Database tables/relationships are unchanged: 16 tables, 27 foreign keys and 13 check constraints.
+
+Tests used isolated `lifelink_hospital_search` / `lifelink_hospital_search_test` databases on port 33329 and a separate app on port 3002. No live user database was altered. Browser map backgrounds were controlled/unavailable during these checks; the live public tile server and physical webcam were not verified. Broad historical counts below are not added to this release's results.
+
+---
+
 # Matched-donor form fix verification — November 19, 2026
 
 Six focused Chrome/API integration groups passed using a separate MySQL QA database, `lifelink_invite_fix`, on port 33329 and app port 3002:

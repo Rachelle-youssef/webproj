@@ -81,6 +81,7 @@ const config = {
   timeZone: timeZone('APP_TIME_ZONE', 'Asia/Beirut'),
   // decides what "today" is for donation dates
   corsOrigins: origins('CORS_ORIGINS', ''),
+  geocodingUrl: text('GEOCODING_URL', 'https://nominatim.openstreetmap.org/search'),
   // other sites allowed to call the API (none by default)
   rateLimit: {
     windowMinutes: integer('RATE_LIMIT_WINDOW_MINUTES', 15, 1, 1440),
